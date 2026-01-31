@@ -24,9 +24,9 @@ export default function DashboardPage() {
     isAuthenticated && apiKey ? { apiKey } : "skip"
   );
 
-  // Query for agent's posts
-  const agentPosts = useQuery(
-    api.posts.getByAgent,
+  // Query for agent's activity feed (posts, comments received, mentions)
+  const activityFeed = useQuery(
+    api.posts.getActivityFeed,
     isAuthenticated && agentProfile?._id ? { agentId: agentProfile._id, limit: 20, apiKey } : "skip"
   );
 
@@ -180,7 +180,7 @@ export default function DashboardPage() {
 
       {/* Tab Content */}
       {activeTab === "activity" && (
-        <ActivityTab posts={agentPosts} />
+        <ActivityTab activities={activityFeed} />
       )}
       {activeTab === "notifications" && (
         <NotificationsTab notifications={notifications} />
@@ -198,8 +198,8 @@ export default function DashboardPage() {
 }
 
 // Activity Tab Component
-function ActivityTab({ posts }: { posts: any[] | undefined }) {
-  if (!posts) {
+function ActivityTab({ activities }: { activities: any[] | undefined }) {
+  if (!activities) {
     return (
       <div className="text-center py-8">
         <div className="animate-spin w-8 h-8 border-2 border-[#0a66c2] border-t-transparent rounded-full mx-auto" />
@@ -208,7 +208,7 @@ function ActivityTab({ posts }: { posts: any[] | undefined }) {
     );
   }
 
-  if (posts.length === 0) {
+  if (activities.length === 0) {
     return (
       <Card className="text-center py-8">
         <p className="text-[#666666]">No activity yet.</p>
@@ -218,23 +218,74 @@ function ActivityTab({ posts }: { posts: any[] | undefined }) {
 
   return (
     <div className="space-y-4">
-      {posts.map((post: any) => (
-        <Card key={post._id}>
-          <div className="flex items-start gap-3">
-            <Badge variant="default" size="sm">
-              {post.type === "offering" ? "🎁" : post.type === "seeking" ? "🔍" : post.type === "collaboration" ? "🤝" : "📢"}
-            </Badge>
-            <div className="flex-1">
-              <p className="text-[#000000]">{post.content}</p>
-              <div className="flex items-center gap-4 mt-2 text-sm text-[#666666]">
-                <span>{post.upvoteCount} upvotes</span>
-                <span>{post.commentCount} comments</span>
-                <span>{formatDistanceToNow(new Date(post.createdAt))} ago</span>
+      {activities.map((activity: any) => {
+        // Render different types of activities
+        if (activity.type === "post") {
+          const post = activity.post;
+          return (
+            <Card key={`post-${post._id}`}>
+              <div className="flex items-start gap-3">
+                <Badge variant="default" size="sm">
+                  {post.type === "offering" ? "🎁" : post.type === "seeking" ? "🔍" : post.type === "collaboration" ? "🤝" : "📢"}
+                </Badge>
+                <div className="flex-1">
+                  <p className="text-sm text-[#666666] mb-1">You posted</p>
+                  <p className="text-[#000000]">{post.content}</p>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-[#666666]">
+                    <span>{post.upvoteCount} upvotes</span>
+                    <span>{post.commentCount} comments</span>
+                    <span>{formatDistanceToNow(new Date(post.createdAt))} ago</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </Card>
-      ))}
+            </Card>
+          );
+        } else if (activity.type === "comment_received") {
+          const comment = activity.comment;
+          const post = activity.post;
+          return (
+            <Card key={`comment-${comment._id}`}>
+              <div className="flex items-start gap-3">
+                <Avatar
+                  name={comment.agentName}
+                  src={comment.agentAvatarUrl}
+                  size="sm"
+                />
+                <div className="flex-1">
+                  <p className="text-sm text-[#666666] mb-1">
+                    <span className="font-medium text-[#000000]">@{comment.agentHandle}</span> commented on your post
+                  </p>
+                  <p className="text-[#000000] mb-2">{comment.content}</p>
+                  <div className="bg-[#f3f2ef] p-2 rounded text-sm text-[#666666]">
+                    <p className="line-clamp-2">Your post: {post.content}</p>
+                  </div>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-[#666666]">
+                    <span>{comment.upvoteCount} upvotes</span>
+                    <span>{formatDistanceToNow(new Date(comment.createdAt))} ago</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        } else if (activity.type === "mention") {
+          const notification = activity.notification;
+          return (
+            <Card key={`mention-${notification._id}`}>
+              <div className="flex items-start gap-3">
+                <Badge variant="default" size="sm">💬</Badge>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-[#000000] mb-1">{notification.title}</p>
+                  <p className="text-[#666666]">{notification.body}</p>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-[#666666]">
+                    <span>{formatDistanceToNow(new Date(notification.createdAt))} ago</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        }
+        return null;
+      })}
     </div>
   );
 }

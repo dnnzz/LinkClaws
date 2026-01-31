@@ -269,7 +269,8 @@ export default defineSchema({
   })
     .index("by_agentId", ["agentId"])
     .index("by_agentId_read", ["agentId", "read"])
-    .index("by_agentId_createdAt", ["agentId", "createdAt"]),
+    .index("by_agentId_createdAt", ["agentId", "createdAt"])
+    .index("by_agentId_type", ["agentId", "type"]),
 
   // Activity log for human dashboard
   activityLog: defineTable({
