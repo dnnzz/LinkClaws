@@ -157,5 +157,97 @@ describe("posts", () => {
       expect(offeringFeed.posts.every((p) => p.type === "offering")).toBe(true);
     });
   });
+
+  describe("getActivityFeed", () => {
+    test("should return agent's posts, comments received, and mentions", async () => {
+      const t = convexTest(schema, modules);
+      const { apiKey: agentKey, agentId } = await createVerifiedAgent(t, "agent1");
+      const { apiKey: commenterKey } = await createVerifiedAgent(t, "commenter1");
+      const { apiKey: mentionerKey } = await createVerifiedAgent(t, "mentioner1");
+
+      // Agent creates a post
+      const postResult = await t.mutation(api.posts.create, {
+        apiKey: agentKey,
+        type: "offering",
+        content: "My first post",
+      });
+      expect(postResult.success).toBe(true);
+      if (!postResult.success) throw new Error("Failed to create post");
+
+      // Someone comments on agent's post
+      const commentResult = await t.mutation(api.comments.create, {
+        apiKey: commenterKey,
+        postId: postResult.postId,
+        content: "Great post!",
+      });
+      expect(commentResult.success).toBe(true);
+
+      // Someone mentions the agent in a post
+      const mentionResult = await t.mutation(api.posts.create, {
+        apiKey: mentionerKey,
+        type: "announcement",
+        content: "Hey @agent1 check this out!",
+      });
+      expect(mentionResult.success).toBe(true);
+
+      // Get activity feed
+      const activityFeed = await t.query(api.posts.getActivityFeed, {
+        agentId,
+        limit: 20,
+        apiKey: agentKey,
+      });
+
+      // Should have agent's post, comment received, and mention
+      expect(activityFeed.length).toBeGreaterThanOrEqual(3);
+      
+      // Check that we have each type
+      const hasPost = activityFeed.some((a) => a.type === "post");
+      const hasCommentReceived = activityFeed.some((a) => a.type === "comment_received");
+      const hasMention = activityFeed.some((a) => a.type === "mention");
+      
+      expect(hasPost).toBe(true);
+      expect(hasCommentReceived).toBe(true);
+      expect(hasMention).toBe(true);
+    });
+
+    test("should not include agent's own comments on their posts", async () => {
+      const t = convexTest(schema, modules);
+      const { apiKey: agentKey, agentId } = await createVerifiedAgent(t, "agent2");
+      const { apiKey: otherKey } = await createVerifiedAgent(t, "other");
+
+      // Agent creates a post
+      const postResult = await t.mutation(api.posts.create, {
+        apiKey: agentKey,
+        type: "offering",
+        content: "My post",
+      });
+      expect(postResult.success).toBe(true);
+      if (!postResult.success) throw new Error("Failed to create post");
+
+      // Another agent comments on the post (to have at least one comment)
+      const otherCommentResult = await t.mutation(api.comments.create, {
+        apiKey: otherKey,
+        postId: postResult.postId,
+        content: "Someone else's comment",
+      });
+      expect(otherCommentResult.success).toBe(true);
+
+      // Get activity feed
+      const activityFeed = await t.query(api.posts.getActivityFeed, {
+        agentId,
+        limit: 20,
+        apiKey: agentKey,
+      });
+
+      // Should have the post and the comment_received from other agent
+      const commentReceivedItems = activityFeed.filter((a) => a.type === "comment_received");
+      expect(commentReceivedItems.length).toBeGreaterThan(0);
+      
+      // All comment_received items should be from other agents, not the agent themselves
+      commentReceivedItems.forEach((item: any) => {
+        expect(item.comment.agentId).not.toBe(agentId);
+      });
+    });
+  });
 });
 
