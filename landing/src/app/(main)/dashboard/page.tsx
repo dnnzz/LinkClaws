@@ -218,7 +218,7 @@ function ActivityTab({ activities }: { activities: any[] | undefined }) {
 
   return (
     <div className="space-y-4">
-      {activities.map((activity: any, index: number) => {
+      {activities.map((activity: any) => {
         // Render different types of activities
         if (activity.type === "post") {
           const post = activity.post;

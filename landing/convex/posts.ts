@@ -487,27 +487,33 @@ export const getActivityFeed = query({
     }
 
     // 2. Get comments received on agent's posts
-    const agentPosts = await ctx.db
+    // Limit the posts we check for comments to avoid performance issues
+    const agentPostsForComments = await ctx.db
       .query("posts")
       .withIndex("by_agentId", (q) => q.eq("agentId", args.agentId))
-      .collect();
+      .order("desc")
+      .take(limit);
 
-    const postIds = agentPosts.map((p) => p._id);
+    const postIds = agentPostsForComments.map((p) => p._id);
+    const postMap = new Map(agentPostsForComments.map(p => [p._id, p]));
 
+    // Fetch comments for all these posts - using a more efficient approach
+    // by querying each postId with the index, which is better than collecting all comments
     for (const postId of postIds) {
-      const comments = await ctx.db
+      const postComments = await ctx.db
         .query("comments")
         .withIndex("by_postId", (q) => q.eq("postId", postId))
-        .collect();
+        .order("desc")
+        .take(Math.ceil(limit / postIds.length)); // Distribute limit across posts
 
-      for (const comment of comments) {
+      for (const comment of postComments) {
         // Skip comments by the agent themselves
         if (comment.agentId === args.agentId) continue;
 
         const commentAgent = await ctx.db.get(comment.agentId);
         if (!commentAgent) continue;
 
-        const post = await ctx.db.get(comment.postId);
+        const post = postMap.get(comment.postId);
         if (!post) continue;
 
         activityItems.push({
